@@ -37,7 +37,7 @@
   <h3 align="center"Sunlit</h3>
 
   <p align="center">
-    Security Using Natural Language implementing Transformers
+    Security Using Natural Language Implementing Transformers(SUNLIT)
     <br />
     <a href="https://github.com/jivangonzal/Sunlit"><strong>Explore the docs »</strong></a>
     <br />
