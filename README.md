@@ -66,7 +66,7 @@
 
 <!--[![Product Name Screen Shot][product-screenshot]](https://example.com)-->
 
-This repository is a collection of source code files intended as part of my Master's Research, for the Master of Science in Computer Science with a Specialty in Networks and Security supervised by Prof. Maria Rivera, PhD. at the Iteramerican University of Puerto Rico.
+This repository is a collection of source code files intended as part of my Master's Research, for the Master of Science in Computer Science with a Specialty in Networks and Security supervised by Prof. Maria Rivera, PhD. at the Interamerican University of Puerto Rico.
 
 The aim of the project is to investigate the potential contribution in cybersecurity that can be achieved by using Artificial Intelligence with natural language processing techniques to detect and classify unknown attacks, in order to improve the effectiveness of IDS. The code has been made available as a reference if anyone would like to reproduce the results of the research.
 
