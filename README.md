@@ -84,14 +84,12 @@ The aim of the project is to investigate the potential contribution in cybersecu
 
 The following libraries are used in this project:
 
-* [![Next][Next.js]][Next-url]
-* [![React][React.js]][React-url]
-* [![Vue][Vue.js]][Vue-url]
-* [![Angular][Angular.io]][Angular-url]
-* [![Svelte][Svelte.dev]][Svelte-url]
-* [![Laravel][Laravel.com]][Laravel-url]
-* [![Bootstrap][Bootstrap.com]][Bootstrap-url]
-* [![JQuery][JQuery.com]][JQuery-url]
+- [Pytorch](https://pytorch.org/),
+- [BERT Model Huggingface](https://huggingface.co/docs/transformers/model_doc/bert),
+- [numpy](http://www.numpy.org/),
+- [Dask](https://www.dask.org/).
+- [Radish C++ bert_tokenizer](https://github.com/LieluoboAi/radish)
+- [Snort 3 extra](https://github.com/snort3/snort3_extra)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -103,9 +101,7 @@ The following libraries are used in this project:
 - [x] Add back to top links
 - [ ] Add Additional Templates w/ Examples
 - [ ] Add "components" document to easily copy & paste sections of the readme
-- [ ] Multi-language Support
-    - [ ] Chinese
-    - [ ] Spanish
+
 
 See the [open issues](https://github.com/othneildrew/Best-README-Template/issues) for a full list of proposed features (and known issues).
 
