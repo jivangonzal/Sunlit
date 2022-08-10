@@ -30,7 +30,7 @@
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-  <a href="https://github.com/jigonzal/Sunlit">
+  <a href="https://github.com/jivangonzal/Sunlit">
     <img src="sunlit.png" alt="Logo" width="150" height="80">
   </a>
 
