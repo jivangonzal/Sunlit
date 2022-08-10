@@ -79,7 +79,7 @@ The aim of the project is to investigate the potential contribution in cybersecu
 The following libraries are used in this project:
 
 - [Pytorch](https://pytorch.org/),
-- [BERT Model Huggingface](https://huggingface.co/docs/transformers/model_doc/bert),
+- [BERT Model - Huggingface](https://huggingface.co/docs/transformers/model_doc/bert),
 - [numpy](http://www.numpy.org/),
 - [Dask](https://www.dask.org/),
 - [Radish C++ bert_tokenizer](https://github.com/LieluoboAi/radish),
