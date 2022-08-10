@@ -74,15 +74,15 @@
 
 This repository is a collection of source code files intended as part of my Master's Research, for the Master of Science in Computer Science with a Specialty in Networks and Security supervised by Prof. Maria Rivera, PhD. at the Iteramerican University of Puerto Rico.
 
-The aim of the project is to investigate the potential contribution in cybersecurity that can be achieved by using Artificial Intelligence with natural language processing techniques to detect and classify unknown attacks, in order to improve the effectiveness of IDS.
+The aim of the project is to investigate the potential contribution in cybersecurity that can be achieved by using Artificial Intelligence with natural language processing techniques to detect and classify unknown attacks, in order to improve the effectiveness of IDS. The code has been made available as a reference if anyone would like to reproduce the results of the research.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
 
-### Built With
+### Libraries
 
-This section should list any major frameworks/libraries used to bootstrap your project. Leave any add-ons/plugins for the acknowledgements section. Here are a few examples.
+The following libraries are used in this project:
 
 * [![Next][Next.js]][Next-url]
 * [![React][React.js]][React-url]
