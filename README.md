@@ -31,7 +31,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/jivangonzal/Sunlit">
-    <img src="sunlit.png" alt="Logo" width="150" height="80">
+    <img src="Sunlit.png" alt="Logo" width="150" height="80">
   </a>
 
   <h3 align="center">Best-README-Template</h3>
