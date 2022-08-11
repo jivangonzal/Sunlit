@@ -1,6 +1,7 @@
 import json
 import subprocess as sp
 import os
+import dask.dataframe as dd
 import sys
 
 def split_pcap(capture_path: str) :
@@ -24,7 +25,23 @@ def split_pcap(capture_path: str) :
         if not os.path.isfile(infilename): continue
         output = os.rename(infilename, infilename + '.pcap')
 
+        
+def convert_to_json(datafile: str) :
+    path = './' + datafile
+    
+    files = os.listdir(path)
+    files.sort(key=lambda x: os.path.getmtime(os.path.join(path,x)))
+    for filename in files :
+        
+        if filename.endswith(".pcap"):
+            infilename = os.path.join(path,filename)
+            if not os.path.isfile(infilename): continue
+            newname = infilename.replace('.pcap', '.json')
 
+            f = open(newname, "w")
+            sp.call(["tshark", "-x", "-r", infilename, "-T", "json"], stdout=f)
+            
+            
 def get_tshark_hexstreams(datafile: str) :
     path = './' + datafile
     datafile = datafile + '.csv'
@@ -48,21 +65,31 @@ def get_tshark_hexstreams(datafile: str) :
                         outfile.write(frame["_source"]["layers"]["frame"]["frame.time_epoch"][:-3] + ', ' + frame["_source"]["layers"]["frame_raw"][0] + '\n')
                         
 
-
-def convert_to_json(datafile: str) :
+def join_with_labeled_data(datafile: str) :
     path = './' + datafile
     
-    files = os.listdir(path)
-    files.sort(key=lambda x: os.path.getmtime(os.path.join(path,x)))
-    for filename in files :
-        
-        if filename.endswith(".pcap"):
-            infilename = os.path.join(path,filename)
-            if not os.path.isfile(infilename): continue
-            newname = infilename.replace('.pcap', '.json')
+    df = dd.read_csv(
+      path + '.labeled',
+      sep = '\s+',
+      header=None,
+      dtype=str
+    )
 
-            f = open(newname, "w")
-            sp.call(["tshark", "-x", "-r", infilename, "-T", "json"], stdout=f)
+    df2 = dd.read_csv(
+      path + '.csv',
+      sep = ',',
+      header=None,
+      dtype=str
+    )
+
+    df1 = df.iloc[:, [0, 21]]
+
+    # Merge the csv files.
+    df3 = dd.merge(df2, df1, how='inner', on = 0)
+
+    # Write the output.
+    df3.to_csv(path + '.merged', single_file = True, index=False, header=False)
+
     
 
 if len(str(sys.argv[1])) > 3 :
@@ -70,4 +97,5 @@ if len(str(sys.argv[1])) > 3 :
     split_pcap(name)
     convert_to_json(name)
     get_tshark_hexstreams(name)
+    join_with_labeled_data(name)
 
