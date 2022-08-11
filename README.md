@@ -91,10 +91,10 @@ The following libraries are used in this project:
 <!-- ROADMAP -->
 ## Roadmap
 
-- [x] Add Changelog
-- [x] Add back to top links
-- [ ] Add Additional Templates w/ Examples
-- [ ] Add "components" document to easily copy & paste sections of the readme
+- [x] Develop Data Preparation Scripts (Python)
+- [ ] Develop BERT Pre-Training and Fine-Tuning Script (Pytorch)
+- [ ] Develop Sunlit Snort Inspection module
+- [ ] Update documentation
 
 
 See the [open issues](https://github.com/jivangonzal/Sunlit/issues) for a full list of proposed features (and known issues).
