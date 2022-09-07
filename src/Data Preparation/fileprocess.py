@@ -2,6 +2,8 @@ import json
 import subprocess as sp
 import os
 import dask.dataframe as dd
+import numpy as np
+import pandas as pd
 import sys
 
 def split_pcap(capture_path: str) :
@@ -69,14 +71,14 @@ def join_with_labeled_data(datafile: str) :
     path = './' + datafile
     
     df = dd.read_csv(
-      path + '.labeled',
+      datafile + '.labeled',
       sep = '\s+',
       header=None,
       dtype=str
     )
 
     df2 = dd.read_csv(
-      path + '.csv',
+      datafile + '.csv',
       sep = ',',
       header=None,
       dtype=str
@@ -88,9 +90,34 @@ def join_with_labeled_data(datafile: str) :
     df3 = dd.merge(df2, df1, how='inner', on = 0)
 
     # Write the output.
-    df3.to_csv(path + '.merged', single_file = True, index=False, header=False)
+    df3.to_csv(path + '/' + path + '.merged', single_file = True, index=False, header=False)
 
-    
+
+def sliceNgram(capture_path: str) :
+    path = './' + capture_path
+    output_path = capture_path + '.final.csv'
+
+    df = pd.read_csv(
+        path + '.merged',
+        sep = ',',
+        header=None,
+        dtype=str
+    )
+
+    df[2] = df[2].str.replace('Benign','0')
+    df[2] = df[2].str.replace('Malicious','1')
+    df = df.iloc[:,[1,2]]
+
+    b = np.linspace(0,187,188, dtype=int)
+    c = np.linspace(5,192,188, dtype=int)
+    d = zip(b,c)
+
+    with open(output_path, "a+") as outfile:
+        for y in range(len(df)):
+              a = df.iloc[y,0].ljust(192, '0').strip()
+              z = map(lambda x: a[slice(*x)], zip(b,c))
+              outfile.write(" ".join(z) + ', ' + df.iloc[y,1] + '\n')
+      
 
 if len(str(sys.argv[1])) > 3 :
     name = str(sys.argv[1])
@@ -98,4 +125,4 @@ if len(str(sys.argv[1])) > 3 :
     convert_to_json(name)
     get_tshark_hexstreams(name)
     join_with_labeled_data(name)
-
+    sliceNgram(name)
