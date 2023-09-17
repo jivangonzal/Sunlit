@@ -25,19 +25,23 @@
 #include "main/snort_debug.h"
 #include "profiler/profiler.h"
 #include "protocols/packet.h"
-#include "radish/utils/text_tokenizer.h"
 #include <fstream>
 #include <string>
-#include <cstddef>
 #include "torch/script.h"
+#include "torch/torch.h"
 #include <iostream>
-
-
+#include <map>
+#include <sstream>
+#include <cstring>
+#include <vector>
+#include <istream>
+#include <unordered_map>
 
 using namespace snort;
+using Vocab = std::unordered_map<std::string, size_t>;
 
-#define SUNLIT_GID 256
-#define SUNLIT_SID 2
+#define SUNLIT_GID 247
+#define SUNLIT_SID 1
 
 static const char* s_name = "sunlit";
 static const char* s_help = "Sunlit Deep Learning Inspector";
@@ -53,30 +57,41 @@ THREAD_LOCAL const Trace* sunlit_trace = nullptr;
 // class stuff
 //-------------------------------------------------------------------------
 
+class WordpieceTokenizer {
+public:
+    std::pair<torch::Tensor, torch::Tensor> tokenize(const std::string& text) const;
+    std::shared_ptr<Vocab> mVocab;
+    std::shared_ptr<Vocab> loadVocab(const std::string& vocabFile);
+
+private:
+    std::vector<std::string> split(const std::string& s) const;
+};
+
 class Sunlit : public Inspector
 {
 public:
-    Sunlit();
+    Sunlit(const std::string& pytorch_model_path, const std::string& tokenizer_path);
     void show(const SnortConfig*) const override;
-    void eval(Packet*) override;
-    
+    void eval(Packet*) override;    
 
 private:
-    int max_len = 128;
+    std::string string_to_ngrams(const std::string& s);
     bool to_hex(char* dest, size_t dest_len, const uint8_t* values, size_t val_len);
-    std::string chunk_string(const std::string& s, const std::size_t chunk_size = 4U, const char delimiter = ' ');
-    void preprocess(string text, vector<float> &input_ids, vector<float> &input_mask);
-    std::unique_ptr<radish::TextTokenizer> tokenizer_;
     torch::jit::script::Module module;
+    WordpieceTokenizer pBertTokenizer;
+    
 };
 
-Sunlit::Sunlit()
+Sunlit::Sunlit(const std::string& pytorch_model_path, const std::string& tokenizer_path)
 {
-    std::string pytorch_model = "/home/jigonzal/traced_resnet_model.pt";
-    module = torch::jit::load(pytorch_model);
 
-    tokenizer_.reset(radish::TextTokenizerFactory::Create("radish::BertTokenizer"));
-    tokenizer_->Init("/home/jigonzal/snort-source-files/snort3_extra-3.1.25.0/radish/bert/data/bert-base-uncased-vocab.txt");
+    std::string pytorch_model = pytorch_model_path;
+    module = torch::jit::load(pytorch_model_path);
+
+    pBertTokenizer = WordpieceTokenizer();
+    std::shared_ptr<Vocab> mVocab = pBertTokenizer.loadVocab(tokenizer_path);
+    pBertTokenizer.mVocab = mVocab;
+    
 }
 
 void Sunlit::show(const SnortConfig*) const
@@ -84,14 +99,93 @@ void Sunlit::show(const SnortConfig*) const
     
 }
 
+std::vector<std::string> WordpieceTokenizer::split(const std::string& s) const {
+    std::vector<std::string> result;
+    std::stringstream ss(s);
+    std::string item;
+
+    while (getline (ss, item, ' ')) {
+        result.push_back (item);
+    }
+
+    return result;
+}
+
+std::pair<torch::Tensor, torch::Tensor> WordpieceTokenizer::tokenize(const std::string& text) const {
+    std::vector<std::string> outputTokens;
+    std::string ltext(text);
+    int max_length = 512;
+
+    int pad_token_id = (*mVocab)["[PAD]"], start_token_id = (*mVocab)["[CLS]"], end_token_id = (*mVocab)["[SEP]"];
+
+    for (auto& x : ltext) {
+        x = std::tolower(x);
+    }
+
+    std::vector<std::string> splitTokens = split(ltext);
+
+    for (auto& token : splitTokens) {
+       
+        bool isBad = false;
+        size_t start = 0;
+        std::vector<std::string> subTokens;
+        while (start < token.size()) {
+            size_t end = token.size();
+            std::string curSubstr;
+            bool hasCurSubstr = false;
+            while (start < end) {
+                std::string substr = token.substr(start, end - start);
+                if (start > 0) substr = "##" + substr;
+                if (mVocab->find(substr) != mVocab->end()) {
+                    curSubstr = substr;
+                    hasCurSubstr = true;
+                    break;
+                }
+                end--;
+            }
+            if (!hasCurSubstr) {
+                isBad = true;
+                break;
+            }
+            subTokens.push_back(curSubstr);
+            start = end;
+        }
+        if (isBad) outputTokens.push_back("[UNK]");
+        else outputTokens.insert(outputTokens.end(), subTokens.begin(), subTokens.end());
+        if (outputTokens.size() >= max_length - 2)
+        {
+            outputTokens.resize(max_length - 2);
+            break;
+        }
+    }
+
+    std::vector<int> input_ids(max_length, pad_token_id), masks(max_length, 0);
+    input_ids[0] = start_token_id; masks[0] = 1;
+
+    for (int i = 1; i <= outputTokens.size(); i++) {
+
+        input_ids[i] = (*mVocab)[outputTokens[i - 1]];
+        masks[i] = 1;
+    }
+    
+    int input_id = outputTokens.size() + 1; 
+    masks[input_id] = 1;
+    input_ids[input_id] = end_token_id;
+
+    auto input_ids_tensor = torch::tensor(input_ids).unsqueeze(0);
+    auto masks_tensor = torch::tensor(masks).unsqueeze(0);
+
+    return std::make_pair(input_ids_tensor, masks_tensor);
+}
+
 bool Sunlit::to_hex(char* dest, size_t dest_len, const uint8_t* values, size_t val_len) {
 
-    if(dest_len < (val_len*2+1)) /* check that dest is large enough */
+    if(dest_len < (val_len*2+1)) 
         return false;
     
-    *dest = '\0'; /* in case val_len==0 */
+    *dest = '\0'; 
     while(val_len--) {
-        /* sprintf directly to where dest points */
+        
         sprintf(dest, "%02X", *values);
         dest += 2;
         ++values;
@@ -99,123 +193,80 @@ bool Sunlit::to_hex(char* dest, size_t dest_len, const uint8_t* values, size_t v
     return true;
 }
 
-void Sunlit::preprocess(string text, vector<float> &input_ids, vector<float> &input_mask)
-{
-    vector<string> tokens;
-    tokenize(text,tokens,valid_positions);
-    // insert "[CLS}"
-    tokens.insert(tokens.begin(),"[CLS]");
-    valid_positions.insert(valid_positions.begin(),1.0);
-    // insert "[SEP]"
-    tokens.push_back("[SEP]");
-    valid_positions.push_back(1.0);
-    for(int i = 0; i < tokens.size(); i++)
-    {
-        segment_ids.push_back(0.0);
-        input_mask.push_back(1.0);
+std::shared_ptr<Vocab> WordpieceTokenizer::loadVocab(const std::string& vocabFile) {
+    std::shared_ptr<Vocab> vocab(new Vocab);
+    size_t index = 0;
+    std::ifstream ifs(vocabFile, std::ifstream::in);
+    if (!ifs) {
+        throw std::runtime_error("open file failed");
     }
-    input_ids = tokenizer.convert_tokens_to_ids(tokens);
-    while(input_ids.size() < max_len)
-    {
-        input_ids.push_back(0.0);
-        input_mask.push_back(0.0);
+    std::string token;
+    while (getline(ifs, token)) {
+         if (token.empty()) break;
+        (*vocab)[token] = index;
+        index++;
     }
+    return vocab;
 }
 
-std::string Sunlit::chunk_string(const std::string& s, const std::size_t chunk_size, const char delimiter) 
+std::string Sunlit::string_to_ngrams(const std::string& s)
 {
+    std::string tempstr;
     std::string result;
     const auto s_size = s.size();
-    result.reserve(s_size + (s_size / chunk_size));
-
-    for (std::size_t i = 0U; i < s_size; i += chunk_size) {
-        result += s.substr(i, chunk_size);
-        if (i + chunk_size < s_size) { 
-            result += delimiter; 
-        }
+    result.reserve(s_size + (s_size * 5));
+    tempstr.append(s);
+    tempstr.append("0000");
+    for (int i = 0; i < s_size - 2; i++) {
+        result += tempstr.substr(i, 5) + " ";
     }
+    result += tempstr.substr(tempstr.length() - 5, 5);
     return result;
 }
 
 void Sunlit::eval(Packet* p)
 {
-    
-    
-    auto ids = tokenizer_->Encode("This is only a test");
-    for (auto v : ids)
-    {
-        std::string valu = std::to_string(v);
-        const char * tex = valu.c_str();
-        WarningMessage(tex);
-    }
 
-    return;
-
-
-    
-    try {
-
-    
-        // Create a vector of inputs.
-        std::vector<torch::jit::IValue> inputs;
-        inputs.push_back(torch::ones({1, 3, 224, 224}));
-
-        // Execute the model and turn its output into a tensor.
-        at::Tensor output = module.forward(inputs).toTensor();
-        //WarningMessage(output.slice(1, 0, 5));
-        //std::string otext = output.slice(/*dim=*/1, /*start=*/0, /*end=*/5);
-
-        double d1 = output[0][0].item<double>();
-        double d2 = output[0][1].item<double>();
-        double d3 = output[0][2].item<double>();
-        double d4 = output[0][3].item<double>();
-        double d5 = output[0][4].item<double>();
-
-        std::string mess = std::to_string(d1) + " " + std::to_string(d2) + " " + std::to_string(d3) + " " + std::to_string(d4) + " " + std::to_string(d5);
-        int n = mess.length();
- 
-        // declaring character array
-        char char_array[n + 1];
-    
-        // copying the contents of the
-        // string to char array
-        strcpy(char_array, mess.c_str());
-
-        WarningMessage(char_array);
-    }
-    catch (const c10::Error& e) {
-        WarningMessage("error loading the model");
-        
-        return;
-    }
-
-    return;
-    
     char buffer[p->pktlen*2+1]; /* one extra for \0 */
-
+    
     if(to_hex(buffer, sizeof(buffer), p->pkt, p->pktlen))
     {
-        std::fstream myfile;
-        myfile = std::fstream("file.hex", std::fstream::out | std::fstream::app);
-        myfile.write(buffer, strlen(buffer));
+
+        std::string payload(buffer);
+        std::string text = string_to_ngrams(payload);
+
+        torch::Tensor input_ids_tensor, masks_tensor;
+        std::tie(input_ids_tensor, masks_tensor) = pBertTokenizer.tokenize(text);
+   
+        std::vector<torch::jit::IValue> inputs;
+        inputs.push_back(input_ids_tensor);
+        inputs.push_back(masks_tensor);
+
+        auto outputs = module.forward(inputs).toTuple()->elements()[0].toTensor();
+        
+        if (outputs.argmax().item<int>() == 1)
+        {
+            DetectionEngine::queue_event(SUNLIT_GID, SUNLIT_SID);
+        }
+        
     }
-
-
-    //trace_logf(sunlit_trace, p, "destination port: %d, packet payload size: %d.\n",
-    //    p->ptrs.dp, p->dsize);
-
-
-    DetectionEngine::queue_event(SUNLIT_GID, SUNLIT_SID);
-
-
-    ++sunlitstats.total_packets;
-    //WarningMessage("destination port: %d, packet payload size: %d.\n",
-    //        p->ptrs.dp, p->dsize);
+    ++sunlitstats.total_packets;      
 }
 
 //-------------------------------------------------------------------------
 // module stuff
 //-------------------------------------------------------------------------
+
+static const Parameter sunlit_params[] =
+{
+    { "pytorch_model_path", Parameter::PT_STRING, nullptr, nullptr,
+        "Path of Pytorch model" },
+
+    { "tokenizer_path", Parameter::PT_STRING, nullptr, nullptr,
+        "Path of tokenizer vocabulary file" },
+
+    { nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr }
+};
 
 static const RuleMap sunlit_rules[] =
 {
@@ -226,7 +277,7 @@ static const RuleMap sunlit_rules[] =
 class SunlitModule : public Module
 {
 public:
-    SunlitModule() : Module(s_name, s_help)
+    SunlitModule() : Module(s_name, s_help, sunlit_params)
     { }
 
     unsigned get_gid() const override
@@ -244,15 +295,30 @@ public:
     ProfileStats* get_profile() const override
     { return &sunlitPerfStats; }
 
+    bool set(const char*, Value& v, SnortConfig*) override;
+
     Usage get_usage() const override
     { return INSPECT; }
 
     void set_trace(const Trace*) const override;
     const TraceOption* get_trace_options() const override;
 
+public:
+    std::string pytorch_model_path;
+    std::string tokenizer_path;
 
 };
 
+bool SunlitModule::set(const char*, Value& v, SnortConfig*)
+{
+    if ( v.is("pytorch_model_path") )
+        pytorch_model_path = v.get_string();
+
+    else if ( v.is("tokenizer_path") )
+        tokenizer_path = v.get_string();
+
+    return true;
+}
 
 void SunlitModule::set_trace(const Trace* trace) const
 { sunlit_trace = trace; }
@@ -276,7 +342,7 @@ static void mod_dtor(Module* m)
 static Inspector* sunlit_ctor(Module* m)
 {
     SunlitModule* mod = (SunlitModule*)m;
-    return new Sunlit();
+    return new Sunlit(mod->pytorch_model_path, mod->tokenizer_path);
 }
 
 static void sunlit_dtor(Inspector* p)
