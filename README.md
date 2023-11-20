@@ -92,8 +92,8 @@ The following libraries are used in this project:
 ## Roadmap
 
 - [x] Develop Data Preparation Scripts (Python)
-- [ ] Develop BERT Pre-Training and Fine-Tuning Script (Pytorch)
-- [ ] Develop Sunlit Snort Inspection module
+- [x] Develop BERT Pre-Training and Fine-Tuning Script (Pytorch)
+- [x] Develop Sunlit Snort Inspection module
 - [ ] Update documentation
 
 
